@@ -1,0 +1,29 @@
+name: "Nordplanner"
+description: "A add-on to calculate and control my heating to save money"
+version: "0.0.1"
+url: https://github.com/nsg/nordplanner
+slug: "nordplanner"
+init: false
+startup: application
+
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+options:
+  mqtt_topic: ohmigon
+  yr_location_longitude: 18.063240
+  yr_location_latitude: 59.334591
+  temp_increase_constant: 15
+  temp_decrease_constant: 40
+  default_house_temperature: 20
+schema:
+  mqtt_topic: str
+  yr_location_longitude: int
+  yr_location_latitude: int
+  temp_increase_constant: int
+  temp_decrease_constant: int
+  default_house_temperature: int
+services:
+  - mqtt:need
