@@ -17,4 +17,4 @@ Specify the topic that Ohmigon uses, this add-on will also write data to this to
 
 `temp_decrease_constant` specify the rate the house loses heat. This value will be used to calculate the rate with this formula: `(temperature - outdoor_temperature) / temp_decrease_constant`.
 
-`default_house_temperature` just a default value, I expect you to setup a integration to update `${mqtt_topic}/house_temperature` with a real fresh value.
+`default_house_temperature` just a default value, I expect you to setup an automation to update `${mqtt_topic}/house_temperature` with a real fresh value.
