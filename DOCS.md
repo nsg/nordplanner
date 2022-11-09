@@ -13,8 +13,10 @@ Specify the topic that Ohmigon uses, this add-on will also write data to this to
 
 `yr_location_longitude` and `yr_location_latitude` is used to specify your location for the temperature forecasts.
 
-`temp_increase_constant` specify the rate the heating system can increase the temperature with. This value will be used to calculate the rate with this formula: `(temperature - outdoor_temperature) / temp_increase_constant - heat_loss`.
+`temp_min_temperature` and `temp_max_temperature` temperatures
 
-`temp_decrease_constant` specify the rate the house loses heat. This value will be used to calculate the rate with this formula: `(temperature - outdoor_temperature) / temp_decrease_constant`.
+`temp_increase_constant` specify the rate the heating system can increase the temperature with. Larger value is considered faster. `temp_increase_constant_boost` is added to the constant when the electrical cartridge fires.
+
+`temp_decrease_constant` specify the rate the house loses heat. Smaller value is considered faster.
 
 `default_house_temperature` just a default value, I expect you to setup an automation to update `${mqtt_topic}/house_temperature` with a real fresh value.

@@ -6,7 +6,7 @@ INCLUDE_FILES = Dockerfile README.md DOCS.md config.yaml run.sh src
 depbuild: deploy build
 	@:
 
-deploy: #test
+deploy: test
 	ssh root@${HOME_ASSISTANT_HOST} mkdir -p /addons/${ADDON_NAME}
 	scp -r ${INCLUDE_FILES} root@${HOME_ASSISTANT_HOST}:/addons/${ADDON_NAME}
 

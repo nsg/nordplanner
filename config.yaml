@@ -15,14 +15,20 @@ options:
   mqtt_topic: ohmigon
   yr_location_longitude: 18.063240
   yr_location_latitude: 59.334591
-  temp_increase_constant: 15
+  temp_min_temperature: 19
+  temp_max_temperature: 22
+  temp_increase_constant: 14
+  temp_increase_constant_boost: 1
   temp_decrease_constant: 40
   default_house_temperature: 20
 schema:
   mqtt_topic: str
   yr_location_longitude: int
   yr_location_latitude: int
+  temp_min_temperature: int
+  temp_max_temperature: int
   temp_increase_constant: int
+  temp_increase_constant_boost: int
   temp_decrease_constant: int
   default_house_temperature: int
 services:

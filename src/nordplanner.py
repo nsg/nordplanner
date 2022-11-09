@@ -3,9 +3,11 @@ import datetime
 import os
 import json
 
+
 import mqtt
 import nordpool
 import yr
+import utils
 
 #
 # Read config from options.json and the environment
@@ -19,20 +21,15 @@ long = config["yr_location_longitude"]
 lat = config["yr_location_latitude"]
 house_temperature = config["default_house_temperature"]
 temp_increase_constant = config["temp_increase_constant"]
+temp_min_temperature = config["temp_min_temperature"]
+temp_max_temperature = config["temp_max_temperature"]
+temp_increase_constant_boost = config["temp_increase_constant_boost"]
 temp_decrease_constant = config["temp_decrease_constant"]
 
 today = datetime.date.today()
 tomorrow = today + datetime.timedelta(days=1)
 
 schedule = {}
-
-
-def get_temp_decrease_value(outside_temp, inside_temp):
-    return round((inside_temp - outside_temp) / temp_decrease_constant, 2)
-
-
-def get_temp_increase_value(outside_temp, inside_temp):
-    return round((inside_temp - outside_temp) / temp_increase_constant, 2)
 
 
 def schedule_updates(client, userdata, msg):
@@ -81,47 +78,23 @@ def refresh(client, userdata, msg):
     temperatures = yr.get_temperatures(long, lat)
     nordpool_data = nordpool.get_data_for_tomorrow()
 
-    # Try a few different plans, use the best one!
-    plan1 = plan_day(
+    plan = utils.plan_day(
         temperatures,
         nordpool_data,
-        start_temp=house_temperature,
-        cutoff_price=20,
-        end_temp=22,
-    )
-    plan2 = plan_day(
-        temperatures,
-        nordpool_data,
-        start_temp=house_temperature,
-        cutoff_price=20,
-        end_temp=23,
-    )
-    plan3 = plan_day(
-        temperatures,
-        nordpool_data,
-        start_temp=house_temperature,
-        cutoff_price=20,
-        end_temp=23,
-        min_temp=18,
+        1,
+        house_temperature,
+        temp_max_temperature,
+        temp_min_temperature,
+        config,
     )
 
-    # Base plan, use this unless we find something better
-    plan = plan1
-
-    # Will a little extra heat help?
-    if plan2["max_price"] > plan1["max_price"]:
-        print("Use plan2: Heath the house a little extra")
-        plan = plan2
-
-    # If it's expensive, accept a cooler minimum temperature
-    if plan["max_price"] > 70 and plan3["max_price"] < plan["max_price"]:
-        print("Use plan3: Expensive price, I will allow a colder minimum temperature")
-        plan = plan3
-
+    print(f"max_price: {plan['max_price']}", flush=True)
     mq.publish("plan/max_price", plan["max_price"])
 
     i = 0
     for h in plan["hours"]:
+        print(h, flush=True)
+
         k = f"plan/schedule/{i}"
         jsn = {"target": h["target"]}
         if h["active"]:
@@ -133,52 +106,6 @@ def refresh(client, userdata, msg):
         time.sleep(0.2)
         i = i + 1
     mq.publish("plan/refreshed_at", cur_datetime())
-
-
-def plan_day(
-    temperatures, nordpool_data, cutoff_price, start_temp=20.4, end_temp=21, min_temp=19
-):
-    temp = start_temp
-    cold = False
-    ret = {"to_cold": False, "max_price": cutoff_price, "hours": [None] * 24}
-    for hour in range(24):
-        npd = nordpool_data[hour]
-        wfd = temperatures[hour]
-        fire = False
-
-        if npd < cutoff_price:
-            if temp < end_temp:
-                temp = temp + get_temp_increase_value(wfd, temp)
-                fire = True
-
-        tmp_dec_value = get_temp_decrease_value(wfd, temp)
-        temp = temp - tmp_dec_value
-        if temp < min_temp:
-            cold = True
-
-        ret["hours"][hour] = {
-            "target": 20,
-            "price": npd,
-            "active": fire,
-            "indoor_forecast": f"{temp:.1f}",
-            "outdoor_forecast": wfd,
-            "lost_temperature": tmp_dec_value,
-        }
-
-        if fire:
-            ret["hours"][hour]["target"] = round(wfd)
-
-    if cold:
-        return plan_day(
-            temperatures,
-            nordpool_data,
-            cutoff_price + 1,
-            start_temp,
-            end_temp,
-            min_temp,
-        )
-    else:
-        return ret
 
 
 def cur_datetime():

@@ -4,7 +4,7 @@ import datetime
 import xml.etree.ElementTree as ET
 
 
-def get_temperatures(lat, long, altitude=1):
+def get_temperatures(long, lat, altitude=1):
     url = f"https://api.met.no/weatherapi/locationforecast/2.0/classic?altitude={altitude}&lat={lat}&lon={long}"
     resp = requests.get(url, headers={"User-Agent": "nordplanner/yr-forecast"})
     ret = []
