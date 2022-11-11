@@ -53,7 +53,11 @@ def schedule_updates(client, userdata, msg):
 
         if payload == "online" and target >= 18:
             # User has manually enabled an offline hour
-            target = schedule[0].get("target", 5)
+            for i in range(1, 23):
+                target = schedule[i].get("target", 5)
+                if target != 20:
+                    break
+
             print(
                 f"Override target temperature for hour {topic_hour}, set to {target} degrees"
             )
