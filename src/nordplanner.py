@@ -30,6 +30,9 @@ today = datetime.date.today()
 tomorrow = today + datetime.timedelta(days=1)
 
 schedule = {}
+schedule48 = {}
+
+SUMMER_MODE_TEMPERATURE = 20
 
 
 def schedule_updates(client, userdata, msg):
@@ -62,6 +65,46 @@ def schedule_updates(client, userdata, msg):
         #    mq.publish(f"plan/schedule/{topic_hour}/data", json.dumps(data))
 
 
+def regen_schedule48():
+    global schedule
+    global schedule48
+
+    # My Elomax 250 will enable "summer mode" when:
+    #   temperature > 20 for 60 minutes
+    # It will be disabled when:
+    #   temperature <= 18 for 90 minutes
+    #
+    # A temparature below 5 will use the power hungry (but quick) electric cartage
+    # The electric cartage will be exclusivly used if the outdoor temperature is
+    # below -18
+
+    if len(schedule) >= 23:
+        for current_hour in range(24):
+            last_hour = 0 if current_hour - 1 < 0 else current_hour - 1
+            last_2hour = 0 if last_hour -1 < 0 else last_hour -1
+
+            if schedule[current_hour]['status'] == 'online':
+                # Enable it an 1.5 hours before the selected start time
+                schedule48[last_hour*2-1] = schedule[last_2hour]['target_temperature']
+                schedule48[last_hour*2] = schedule[last_hour]['target_temperature']
+                schedule48[last_hour*2+1] = schedule[last_hour]['target_temperature']
+
+                # Also enable it for the selected time
+                schedule48[current_hour*2] = schedule[current_hour]['target_temperature']
+                schedule48[current_hour*2+1] = schedule[current_hour]['target_temperature']
+            else:
+                # Enable summer mode a hour before the selected time
+                schedule48[last_hour*2] = SUMMER_MODE_TEMPERATURE
+                schedule48[last_hour*2+1] = SUMMER_MODE_TEMPERATURE
+
+                # Also enable it for the selected time
+                schedule48[current_hour*2] = SUMMER_MODE_TEMPERATURE
+                schedule48[current_hour*2+1] = SUMMER_MODE_TEMPERATURE
+
+        #for k, v in schedule48.items():
+        #    print(f"{k} ({k/2}) \t {v} \t {schedule[int(k/2)]['status']}", flush=True)
+        #print("", flush=True)
+
 def update_house_temperature(client, userdata, msg):
     global house_temperature
 
@@ -90,11 +133,6 @@ def cur_datetime():
     return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def is_top_of_hour():
-    minute = int(datetime.datetime.today().minute)
-    return minute == 0
-
-
 #
 # Connect to MQTT and subscribe to topics
 #
@@ -106,10 +144,15 @@ mq.subscribe("house_temperature", update_house_temperature)
 while True:
     hour = int(datetime.datetime.today().hour)
 
-    if is_top_of_hour():
-        hourly_schedule = schedule.get(hour)
-        if hourly_schedule:
-            target = hourly_schedule["target_temperature"]
-            print(f"Temperature set to {target}")
-            mq.publish("set_temperature", target)
+    regen_schedule48()
+
+    if int(datetime.datetime.today().minute) == 0:
+        hourly_temperature = schedule48.get(hour*2)
+        if hourly_temperature:
+            mq.publish("set_temperature", hourly_temperature)
+    elif int(datetime.datetime.today().minute) == 30:
+        hourly_temperature = schedule48.get(hour*2+1)
+        if hourly_temperature:
+            mq.publish("set_temperature", hourly_temperature)
+
     time.sleep(30)
