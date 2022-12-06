@@ -42,31 +42,24 @@ def schedule_updates(client, userdata, msg):
         schedule[topic_hour] = {}
 
     if topic_type == "data":
+        # Data has updated, update the local state
         payload = json.loads(msg.payload.decode())
-        schedule[topic_hour]["target"] = payload["target"]
-        schedule[topic_hour]["override"] = payload.get("override", False)
+        schedule[topic_hour] = {**schedule[topic_hour], **payload}
+
     elif topic_type == "status":
-        payload = msg.payload.decode()
-        target = schedule[topic_hour].get("target", 0)
-        override = schedule[topic_hour].get("override", False)
-        schedule[topic_hour]["status"] = payload
+        # Status has changed, possible trigger logic!
 
-        if payload == "online" and target >= 18:
-            # User has manually enabled an offline hour
-            for i in range(1, 23):
-                target = schedule[i].get("target", 5)
-                if target != 20:
-                    break
+        status = { "status": msg.payload.decode() }
+        schedule[topic_hour] = {**schedule[topic_hour], **status}
 
-            print(
-                f"Override target temperature for hour {topic_hour}, set to {target} degrees"
-            )
-            data = {"target": target, "override": True}
-            mq.publish(f"plan/schedule/{topic_hour}/data", json.dumps(data))
-        elif payload == "offline" and override:
-            # User has disabled and overridden hour
-            data = {"target": 20, "override": False}
-            mq.publish(f"plan/schedule/{topic_hour}/data", json.dumps(data))
+        #target = schedule[topic_hour].get("target_temperature", 0)
+
+        #if payload == "online":
+        #    mq.publish(f"plan/schedule/{topic_hour}/data", json.dumps(schedule[topic_hour]))
+        #elif payload == "offline" and override:
+        #    # User has disabled and overridden hour
+        #    data = {"target": 20, "override": False}
+        #    mq.publish(f"plan/schedule/{topic_hour}/data", json.dumps(data))
 
 
 def update_house_temperature(client, userdata, msg):
@@ -76,44 +69,30 @@ def update_house_temperature(client, userdata, msg):
 
 
 def refresh(client, userdata, msg):
-    global schedule
 
-    schedule = {}
     temperatures = yr.get_temperatures(long, lat)
     nordpool_data = nordpool.get_data_for_tomorrow()
 
-    plan = utils.plan_day(
-        temperatures,
-        nordpool_data,
-        1,
-        house_temperature,
-        temp_max_temperature,
-        temp_min_temperature,
-        config,
-    )
-
-    print(f"max_price: {plan['max_price']}", flush=True)
-    mq.publish("plan/max_price", plan["max_price"])
-
-    i = 0
-    for h in plan["hours"]:
-        print(h, flush=True)
-
-        k = f"plan/schedule/{i}"
-        jsn = {"target": h["target"]}
-        if h["active"]:
-            mq.publish(f"{k}/status", "online")
-        else:
-            mq.publish(f"{k}/status", "offline")
-
-        mq.publish(f"{k}/data", json.dumps(jsn))
+    for h in range(24):
+        topic_path = f"plan/schedule/{h}"
+        json_data = {
+            "outside_temperature": temperatures[h],
+            "nordpool_data": nordpool_data[h],
+            "target_temperature": 6
+        }
+        mq.publish(f"{topic_path}/status", "online")
+        mq.publish(f"{topic_path}/data", json.dumps(json_data))
         time.sleep(0.2)
-        i = i + 1
     mq.publish("plan/refreshed_at", cur_datetime())
 
 
 def cur_datetime():
     return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def is_top_of_hour():
+    minute = int(datetime.datetime.today().minute)
+    return minute == 0
 
 
 #
@@ -126,15 +105,11 @@ mq.subscribe("house_temperature", update_house_temperature)
 
 while True:
     hour = int(datetime.datetime.today().hour)
-    minute = int(datetime.datetime.today().minute)
 
-    #
-    # One ever hour, look at the hours data and trigger an update
-    #
-    if minute == 0:
+    if is_top_of_hour():
         hourly_schedule = schedule.get(hour)
         if hourly_schedule:
-            target = hourly_schedule["target"]
+            target = hourly_schedule["target_temperature"]
             print(f"Temperature set to {target}")
             mq.publish("set_temperature", target)
     time.sleep(30)
