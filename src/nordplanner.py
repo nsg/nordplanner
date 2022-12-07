@@ -70,13 +70,13 @@ def regen_schedule48():
     global schedule48
 
     # My Elomax 250 will enable "summer mode" when:
-    #   temperature > 20 for 60 minutes
+    #   temperature > 18 for 60 minutes
     # It will be disabled when:
-    #   temperature <= 18 for 90 minutes
+    #   temperature <= 15 for 90 minutes
     #
     # A temparature below 5 will use the power hungry (but quick) electric cartage
     # The electric cartage will be exclusivly used if the outdoor temperature is
-    # below -18
+    # below -20
 
     if len(schedule) >= 23:
         for current_hour in range(24):
