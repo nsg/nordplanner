@@ -83,15 +83,21 @@ def regen_schedule48():
             last_hour = 0 if current_hour - 1 < 0 else current_hour - 1
             last_2hour = 0 if last_hour -1 < 0 else last_hour -1
 
+            if house_temperature < 18:
+                # It's to cold inside, allow use of electric cartage
+                temperature_key = "outside_temperature"
+            else:
+                temperature_key = "target_temperature"
+
             if schedule[current_hour]['status'] == 'online':
                 # Enable it an 1.5 hours before the selected start time
-                schedule48[last_hour*2-1] = schedule[last_2hour]['target_temperature']
-                schedule48[last_hour*2] = schedule[last_hour]['target_temperature']
-                schedule48[last_hour*2+1] = schedule[last_hour]['target_temperature']
+                schedule48[last_hour*2-1] = schedule[last_2hour][temperature_key]
+                schedule48[last_hour*2] = schedule[last_hour][temperature_key]
+                schedule48[last_hour*2+1] = schedule[last_hour][temperature_key]
 
                 # Also enable it for the selected time
-                schedule48[current_hour*2] = schedule[current_hour]['target_temperature']
-                schedule48[current_hour*2+1] = schedule[current_hour]['target_temperature']
+                schedule48[current_hour*2] = schedule[current_hour][temperature_key]
+                schedule48[current_hour*2+1] = schedule[current_hour][temperature_key]
             else:
                 # Enable summer mode a hour before the selected time
                 schedule48[last_hour*2] = SUMMER_MODE_TEMPERATURE
