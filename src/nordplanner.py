@@ -52,14 +52,14 @@ def schedule_updates(client, userdata, msg):
     elif topic_type == "status":
         # Status has changed, possible trigger logic!
 
-        status = { "status": msg.payload.decode() }
+        status = {"status": msg.payload.decode()}
         schedule[topic_hour] = {**schedule[topic_hour], **status}
 
-        #target = schedule[topic_hour].get("target_temperature", 0)
+        # target = schedule[topic_hour].get("target_temperature", 0)
 
-        #if payload == "online":
+        # if payload == "online":
         #    mq.publish(f"plan/schedule/{topic_hour}/data", json.dumps(schedule[topic_hour]))
-        #elif payload == "offline" and override:
+        # elif payload == "offline" and override:
         #    # User has disabled and overridden hour
         #    data = {"target": 20, "override": False}
         #    mq.publish(f"plan/schedule/{topic_hour}/data", json.dumps(data))
@@ -99,7 +99,7 @@ def regen_schedule48():
     if len(schedule) >= 23:
         for current_hour in range(24):
             last_hour = 0 if current_hour - 1 < 0 else current_hour - 1
-            last_2hour = 0 if last_hour -1 < 0 else last_hour -1
+            last_2hour = 0 if last_hour - 1 < 0 else last_hour - 1
 
             # TODO: Read this from MQTT, and add it as helpers in HA
             cheap_power_cutoff_value = 100
@@ -122,7 +122,7 @@ def regen_schedule48():
                 # Set a fake temparature, heat pump only
                 set_target_temperature(current_hour, 6)
 
-            if schedule[current_hour]['status'] == 'online':
+            if schedule[current_hour]["status"] == "online":
                 # Enable it an 1.5 hours before the selected start time
                 schedule48[last_hour * 2 - 1] = schedule[last_2hour][
                     "target_temperature"
@@ -169,7 +169,7 @@ def refresh(client, userdata, msg):
         json_data = {
             "outside_temperature": temperatures[h],
             "nordpool_data": nordpool_data[h],
-            "target_temperature": 6
+            "target_temperature": 6,
         }
         mq.publish(f"{topic_path}/status", "online")
         mq.publish(f"{topic_path}/data", json.dumps(json_data))
@@ -195,11 +195,11 @@ while True:
     regen_schedule48()
 
     if int(datetime.datetime.today().minute) == 0:
-        hourly_temperature = schedule48.get(hour*2)
+        hourly_temperature = schedule48.get(hour * 2)
         if hourly_temperature:
             mq.publish("set_temperature", hourly_temperature)
     elif int(datetime.datetime.today().minute) == 30:
-        hourly_temperature = schedule48.get(hour*2+1)
+        hourly_temperature = schedule48.get(hour * 2 + 1)
         if hourly_temperature:
             mq.publish("set_temperature", hourly_temperature)
 
