@@ -119,8 +119,12 @@ def regen_schedule48():
                     current_hour, schedule[current_hour]["outside_temperature"]
                 )
             else:
-                # Set a fake temparature, heat pump only
-                set_target_temperature(current_hour, 6)
+                # Set a fake temparature 6C+ for heat pump only
+                # Increate the value if the indoor temperature rises
+                set_target_temperature(
+                    current_hour,
+                    6 if house_temperature < 20 else house_temperature - 12,
+                )
 
             if schedule[current_hour]["status"] == "online":
                 # Enable it an 1.5 hours before the selected start time
