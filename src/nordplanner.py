@@ -65,6 +65,24 @@ def schedule_updates(client, userdata, msg):
         #    mq.publish(f"plan/schedule/{topic_hour}/data", json.dumps(data))
 
 
+def set_target_temperature(hour, value):
+    target = {"target_temperature": value}
+    data = {**schedule[hour], **target}
+    mq.publish(f"plan/schedule/{hour}/data", json.dumps(data))
+
+
+def get_off_temperature(hour):
+    global schedule
+
+    if schedule[hour]["outside_temperature"] < 5:
+        # Do not disable heat pump completly if there is below freezing outside
+        # to protect the water. I'm not fully sure if the cirulation pump is stopped
+        # or so I play safe.
+        return SUMMER_MODE_TEMPERATURE - 4
+    else:
+        return SUMMER_MODE_TEMPERATURE
+
+
 def regen_schedule48():
     global schedule
     global schedule48
@@ -83,33 +101,57 @@ def regen_schedule48():
             last_hour = 0 if current_hour - 1 < 0 else current_hour - 1
             last_2hour = 0 if last_hour -1 < 0 else last_hour -1
 
-            if house_temperature < 18:
-                # It's to cold inside, allow use of electric cartage
-                temperature_key = "outside_temperature"
+            # TODO: Read this from MQTT, and add it as helpers in HA
+            cheap_power_cutoff_value = 100
+            house_min_temperature_value = 18
+            house_max_temperature_value = 21.5
+
+            if house_temperature < house_min_temperature_value:
+                # It's to cold inside, set real temperature (allow use of electric cartage)
+                set_target_temperature(
+                    current_hour, schedule[current_hour]["outside_temperature"]
+                )
+            if house_temperature > house_max_temperature_value:
+                set_target_temperature(current_hour, get_off_temperature(current_hour))
+            elif schedule[current_hour]["nordpool_data"] < cheap_power_cutoff_value:
+                # It's cheap power, set real temperature (allow use of electric cartage)
+                set_target_temperature(
+                    current_hour, schedule[current_hour]["outside_temperature"]
+                )
             else:
-                temperature_key = "target_temperature"
+                # Set a fake temparature, heat pump only
+                set_target_temperature(current_hour, 6)
 
             if schedule[current_hour]['status'] == 'online':
                 # Enable it an 1.5 hours before the selected start time
-                schedule48[last_hour*2-1] = schedule[last_2hour][temperature_key]
-                schedule48[last_hour*2] = schedule[last_hour][temperature_key]
-                schedule48[last_hour*2+1] = schedule[last_hour][temperature_key]
+                schedule48[last_hour * 2 - 1] = schedule[last_2hour][
+                    "target_temperature"
+                ]
+                schedule48[last_hour * 2] = schedule[last_hour]["target_temperature"]
+                schedule48[last_hour * 2 + 1] = schedule[last_hour][
+                    "target_temperature"
+                ]
 
                 # Also enable it for the selected time
-                schedule48[current_hour*2] = schedule[current_hour][temperature_key]
-                schedule48[current_hour*2+1] = schedule[current_hour][temperature_key]
+                schedule48[current_hour * 2] = schedule[current_hour][
+                    "target_temperature"
+                ]
+                schedule48[current_hour * 2 + 1] = schedule[current_hour][
+                    "target_temperature"
+                ]
             else:
                 # Enable summer mode a hour before the selected time
-                schedule48[last_hour*2] = SUMMER_MODE_TEMPERATURE
-                schedule48[last_hour*2+1] = SUMMER_MODE_TEMPERATURE
+                schedule48[last_hour * 2] = get_off_temperature(last_hour)
+                schedule48[last_hour * 2 + 1] = get_off_temperature(last_hour)
 
                 # Also enable it for the selected time
-                schedule48[current_hour*2] = SUMMER_MODE_TEMPERATURE
-                schedule48[current_hour*2+1] = SUMMER_MODE_TEMPERATURE
+                schedule48[current_hour * 2] = get_off_temperature(current_hour)
+                schedule48[current_hour * 2 + 1] = get_off_temperature(current_hour)
 
-        #for k, v in schedule48.items():
-        #    print(f"{k} ({k/2}) \t {v} \t {schedule[int(k/2)]['status']}", flush=True)
-        #print("", flush=True)
+        # for k, v in schedule48.items():
+        #     print(f"{k} ({k/2}) \t {v} \t {schedule[int(k/2)]['status']} {schedule[int(k/2)]['target_temperature']}", flush=True)
+        # print("", flush=True)
+
 
 def update_house_temperature(client, userdata, msg):
     global house_temperature
