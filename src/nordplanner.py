@@ -123,7 +123,7 @@ def regen_schedule48():
                 # Increate the value if the indoor temperature rises
                 set_target_temperature(
                     current_hour,
-                    6 if house_temperature < 20 else house_temperature - 12,
+                    6 if house_temperature < 20 else round(house_temperature - 12, 1),
                 )
 
             if schedule[current_hour]["status"] == "online":
