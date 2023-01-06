@@ -33,6 +33,12 @@ schedule = {}
 schedule48 = {}
 
 SUMMER_MODE_TEMPERATURE = 20
+DEBUG = True
+
+
+def debug_log(msg):
+    if DEBUG:
+        print(msg, flush=True)
 
 
 def schedule_updates(client, userdata, msg):
@@ -42,7 +48,7 @@ def schedule_updates(client, userdata, msg):
     topic_hour = int(msg.topic.split("/")[-2])
 
     if not schedule.get(topic_hour):
-        schedule[topic_hour] = {}
+        schedule[topic_hour] = {"hour": topic_hour}
 
     if topic_type == "data":
         # Data has updated, update the local state
@@ -96,35 +102,19 @@ def regen_schedule48():
     # The electric cartage will be exclusivly used if the outdoor temperature is
     # below -20
 
+    # TODO: Read this from MQTT, and add it as helpers in HA
+    cheap_power_cutoff_value = 100
+    house_min_temperature_value = 18
+    house_boost_temperature_value = 19
+    house_max_temperature_value = 21.5
+
     if len(schedule) >= 23:
+        now_hour = int(datetime.datetime.today().hour)
+        ignore_hour = []
+
         for current_hour in range(24):
             last_hour = 0 if current_hour - 1 < 0 else current_hour - 1
             last_2hour = 0 if last_hour - 1 < 0 else last_hour - 1
-
-            # TODO: Read this from MQTT, and add it as helpers in HA
-            cheap_power_cutoff_value = 100
-            house_min_temperature_value = 18
-            house_max_temperature_value = 21.5
-
-            if house_temperature < house_min_temperature_value:
-                # It's to cold inside, set real temperature (allow use of electric cartage)
-                set_target_temperature(
-                    current_hour, schedule[current_hour]["outside_temperature"]
-                )
-            if house_temperature > house_max_temperature_value:
-                set_target_temperature(current_hour, get_off_temperature(current_hour))
-            elif schedule[current_hour]["nordpool_data"] < cheap_power_cutoff_value:
-                # It's cheap power, set real temperature (allow use of electric cartage)
-                set_target_temperature(
-                    current_hour, schedule[current_hour]["outside_temperature"]
-                )
-            else:
-                # Set a fake temparature 6C+ for heat pump only
-                # Increate the value if the indoor temperature rises
-                set_target_temperature(
-                    current_hour,
-                    6 if house_temperature < 20 else round(house_temperature - 12, 1),
-                )
 
             if schedule[current_hour]["status"] == "online":
                 # Enable it an 1.5 hours before the selected start time
@@ -151,6 +141,60 @@ def regen_schedule48():
                 # Also enable it for the selected time
                 schedule48[current_hour * 2] = get_off_temperature(current_hour)
                 schedule48[current_hour * 2 + 1] = get_off_temperature(current_hour)
+
+            #
+            # Update temperatures based out external data
+            #
+
+            if current_hour >= now_hour and current_hour not in ignore_hour:
+                if house_temperature > house_max_temperature_value:
+                    # It's to hot inside, turn off heating
+                    debug_log(f"[{current_hour}] set off")
+                    set_target_temperature(
+                        current_hour, get_off_temperature(current_hour)
+                    )
+
+                elif house_temperature < house_min_temperature_value:
+                    # It's to cold inside, set real temperature (allow use of electric cartage)
+                    debug_log(f"[{current_hour}] set outside")
+                    set_target_temperature(
+                        current_hour, schedule[current_hour]["outside_temperature"]
+                    )
+
+                elif (
+                    current_hour == now_hour
+                    and house_temperature < house_boost_temperature_value
+                ):
+                    # It's starting to get a little chilly. Look over the coming hours to boost the heating
+                    ch_price = []
+                    for ch in range(current_hour, current_hour + 3):
+                        if ch < 24:
+                            ch_price.append(schedule[ch])
+                    cheapest_hour = sorted(ch_price, key=lambda x: x["nordpool_data"])
+                    cheapest_hour = cheapest_hour[0]["hour"]
+                    debug_log(f"[{current_hour}] set boost at {cheapest_hour}")
+                    set_target_temperature(
+                        cheapest_hour, schedule[cheapest_hour]["outside_temperature"]
+                    )
+                    ignore_hour.append(cheapest_hour)
+
+                elif schedule[current_hour]["nordpool_data"] < cheap_power_cutoff_value:
+                    # It's cheap power, set real temperature (allow use of electric cartage)
+                    debug_log(f"[{current_hour}] cheep, set outside")
+                    set_target_temperature(
+                        current_hour, schedule[current_hour]["outside_temperature"]
+                    )
+
+                else:
+                    # Set a fake temparature 6C+ for heat pump only
+                    # Increate the value if the indoor temperature rises
+                    debug_log(f"[{current_hour}] set default")
+                    if house_temperature < 20:
+                        default_temparature = 6
+                    else:
+                        default_temparature = round(house_temperature - 12, 1)
+
+                    set_target_temperature(current_hour, default_temparature)
 
         # for k, v in schedule48.items():
         #     print(f"{k} ({k/2}) \t {v} \t {schedule[int(k/2)]['status']} {schedule[int(k/2)]['target_temperature']}", flush=True)
