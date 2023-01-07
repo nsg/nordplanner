@@ -102,8 +102,10 @@ def regen_schedule48():
     # The electric cartage will be exclusivly used if the outdoor temperature is
     # below -20
 
-    # TODO: Read this from MQTT, and add it as helpers in HA
+    # Default value
     cheap_power_cutoff_value = 100
+
+    # TODO: Read this from MQTT, and add it as helpers in HA
     house_min_temperature_value = 18
     house_boost_temperature_value = 19
     house_max_temperature_value = 21.5
@@ -111,6 +113,11 @@ def regen_schedule48():
     if len(schedule) >= 23:
         now_hour = int(datetime.datetime.today().hour)
         ignore_hour = []
+
+        # Calculate average price for today, update cheap_power_cutoff_value
+        list_of_prices = { v['nordpool_data'] for _, v in schedule.items() }
+        average_prices = sum(list_of_prices) / len(list_of_prices)
+        cheap_power_cutoff_value = average_prices
 
         for current_hour in range(24):
             last_hour = 0 if current_hour - 1 < 0 else current_hour - 1
